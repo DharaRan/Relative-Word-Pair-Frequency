@@ -1,0 +1,50 @@
+====================
+	Input/Output 
+====================
+
+1. Mapper1
+   Input: key~LongWritable value~Text
+   Output: key~AdjacentWord value~IntWritable
+   
+   Reducer1: 
+   Input: key~AdjacentWord value~IntWritable
+   Output: key~AdjacentWord value~DoubleWritable
+
+2. Mapper2:
+   Input: key= Object value=Text
+   Output: key= DoubleWritable value=AdjacentWord
+   
+   Reducer2:
+   Input: key= DoubleWritable value=AdjacentWord
+   Output: key=AdjacentWord, value= DoubleWritable
+
+3. Mapper3:
+   Input: key= Object value=Text
+   Output: key= WordPair value=DoubleWritable
+   
+   Reducer3:
+   Input: key= WordPair value=DoubleWritable
+   Output: key=WordPair, value= DoubleWritable
+
+4. Mapper4:
+   Input: key= Object value=Text
+   Output: key= DoubleWritable value=WordPair
+   
+   Reducer4:
+   Input: key= DoubleWritable value=WordPair
+   Output: key=WordPair, value= DoubleWritable   
+   
+====================================
+	Hadoop cluster settings
+====================================
+
+Number of VM: 2 instances
+Number of Mappers: 4
+Number of Reducers: 4
+
+
+============================ 
+		Runtime
+=============================
+Pseudo distributed mode: 10min 9sec
+Fully distributed mode: 9 min 05sec

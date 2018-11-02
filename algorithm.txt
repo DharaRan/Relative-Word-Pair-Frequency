@@ -1,0 +1,94 @@
+Goal: 
+	Input: 100kWikiText:
+	Output: Relative Frequency (RF) of word Pairs
+	
+	I broke the Mapreduce into 4 jobs
+	The first job is to get the total count of both individual and word pair 
+	The second job get the top 100 use frequencies
+	The third job is to calculate the RF frequency
+	The fourth job is to get the Top 100 word pair in decending order the RF and remove RF of 1 (Please see justification file)
+	
+	
+	(1) In Mapper 1
+		A AdjacentWord object is created that will store Word and neighboring word;
+		
+		Word pair co-occurances was determined by a given word and the word on the right of it.
+			e.g given the following sentences: Deep sleep is stage four of REM sleep
+					The algorithm will return the RF word the word pairs:
+						(deep,sleep)
+						(sleep, is) x
+						(is stage)x
+						(stage four)
+						(four of)x
+						(of REM )x
+						(REM sleep)
+					The algorithm will remove pairs that contain stopword such as is, of. In the above example the word pairs that will be removed have an "x"
+					next to it.
+		
+		Each word pair will be stored in the WordPair object e.g the word pair (deep,sleep) word=deep and neighbor=sleep
+		Each individual word will be stored in WordPair object, but it's neighbor is going to have a flag character *.
+		Moreover, each pair frequency value will be 1 and each individual word frequency will be the total times it appears in the give document
+		
+		In the AdjacentWord.java class which there is a comparator that will ensure when the AdjacentWord object go to the reducer it is ordered so that the 
+		indidviudal word with the flag (*) come first then the word pairs.
+	
+
+	(2) Reducer1	
+		Aggrevate the count of the total individual words count in the document and the total pair count.
+	
+	
+	(3) Mapper 2
+		
+		Basically read in the out of the first mapreduce. 
+		Frequency count of individual and wordpair key in DoubleWritable and
+		Stores in in AdjacentWord class as the value
+		
+
+	(4)	FlagWordPartitioner Classes will be created	
+		 This will make a split by sending all the individual word with flag * to one reducer and the word pair to another reducer
+	
+	(5) Reducer2
+		
+		Will context the only the top 100 use frequency  and context the wordpair as is
+		To ensure the the top 100 count is output the setSortComparatorClass will be modified in the 
+		class called DescendingKeyComparator: this way the output will output in a decending order.
+	
+	
+	(6) Mapper 3
+		Basically read in the out of the first mapreduce. 
+		Frequency count of individual and wordpair key in DoubleWritable and
+		Stores in in WordPair class as the value;
+		THe WordPair class is similar to AdjacentWord but the only difference is that compareTo() function.
+		Here the compareTo function makes sure that individual and indidviudal with it pairs are grouped together
+		
+	(7) Paritioner 2
+	
+		In the WordPair Class a method called compareTo will be override to make the words with the flag got to the Reducer1 first than the wordpair
+		 e.g The reducer will get this order: (cat,1)	      Hash code: 98262
+											  (cat,1)		  Hash code: 98262
+											  (<cat sat>,1)   Hash code: 98262
+											  (dog,1) 		  Hash code: 99644
+											  (<dog,eats>,1)  Hash code: 99644
+		The partitioner called WordPairPartitioner.java call will ensure the same hashcode value word and wordpair go to the same reducer.
+			e.g  See above; same hashcode value will got to the same reducer
+		
+	(8) Reducer3 
+		Calcaluate the RF frequency
+	
+	(9) Mapper4
+		Basically read in the out of the first mapreduce. 
+		
+	
+	(10)Reducer4
+		Will output the top 100 relative word freq.
+		setSortComparatorClass will be modified
+		This way the output will output in a decending order.
+		
+		
+
+		
+		 
+		
+					
+
+		

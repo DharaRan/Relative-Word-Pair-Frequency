@@ -1,0 +1,482 @@
+For Hadoop, the type of instances to create:
+
+Red Hat Linux 7.5
+using the vm1_bigdata.pem  key
+
+--------------------------------------------
+
+Vm1- NameNode
+Public DNS: ec2-54-236-39-173.compute-1.amazonaws.com
+Instance ID: i-0dd5d1c4c87835d13
+PrivateIP: 172.31.12.156
+Sec grp ID: sg-09e2167eb8b92a7ac
+
+ssh -i "vm1_bigdata.pem" ec2-18-235-1-203.compute-1.amazonaws.com
+
+ssh -i ~/.ssh/id_rsa 172.31.12.156
+
+ssh 172.31.12.156
+
+
+------------------------
+VM2
+Public DNS:  ec2-100-24-125-91.compute-1.amazonaws.com
+
+Instance ID: i-02eeb72f124b04664
+PrivateIP: 172.31.6.216
+Sec grp ID: sg-08089c089f8fb4064
+
+ssh -i "vm1_bigdata.pem" ec2-100-24-125-91.compute-1.amazonaws.com
+
+ssh -i ~/.ssh/id_rsa 172.31.6.216
+
+ssh 172.31.6.216
+--------------
+
+========================================================================================
+################  Pseudo-distributed ###################################################
+========================================================================================
+
+(1) Phaseless ssh
+
+Copy the security group of Vm1 into VM2: see link below
+https://linuxroutes.com/make-two-ec2-instances-connect-aws/
+
+Make to put the "vm1_bigdata.pem"  into each VM1 instance
+
+pass this command to give permission: 
+	chmod 400 vm1_bigdata.pem
+
+On each server run:
+		ssh-keygen
+
+Hit enter enter enter. You'll have two files:
+		.ssh/id_rsa
+		.ssh/id_rsa.pub
+
+On Server A, cat and copy to clipboard the public key:	
+	cat ~/.ssh/id_rsa.pub
+	[select and copy to your clipboard]	
+
+ssh into Server B, and append the contents of that to the it's authorized_keys file:
+	cat >> ~/.ssh/authorized_keys
+	[paste your clipboard contents]
+	[ctrl+d to exit]	
+	
+ssh -i ~/.ssh/id_rsa private.ip.of.other.server	
+	
+	
+----------------
+
+(2)Install openjdk-8-jdk
+
+If wget is not aviable pass the following command:
+		sudo yum install wget
+
+Get Java from internet:
+wget --no-cookies --no-check-certificate --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F; oraclelicense=accept-securebackup-cookie" "http://download.oracle.com/otn-pub/java/jdk/8u191-b12/2787e4a523244c269598db4e85c51e0c/jdk-8u191-linux-x64.rpm"
+
+sudo yum localinstall jdk-8u191-linux-x64.rpm
+
+readlink -f /usr/bin/java | sed "s:bin/java::"																																					
+
+-----
+
+(3)Install Hadoop	
+
+curl -O http://mirror.cogentco.com/pub/apache/hadoop/common/hadoop-2.9.0/hadoop-2.9.0.tar.gz
+tar xfz hadoop-2.9.0.tar.gz
+sudo mv hadoop-2.9.0 /usr/local/hadoop
+rm hadoop-2.9.0.tar.gz
+sudo chown -R  ec2-user:ec2-user /usr/local/hadoop
+	
+	
+---------
+(4)Configure Bash Profile
+
+#####bash_profile settings
+## JAVA env variables
+	export JAVA_HOME=/usr/java/jdk1.8.0_191-amd64
+	export PATH=$PATH:$JAVA_HOME/bin
+	export CLASSPATH=.:$JAVA_HOME/jre/lib:$JAVA_HOME/lib:$JAVA_HOME/lib/tools.jar
+	## HADOOP env variables
+	export HADOOP_HOME=/usr/local/hadoop
+	export HADOOP_COMMON_HOME=$HADOOP_HOME
+	export HADOOP_HDFS_HOME=$HADOOP_HOME
+	export HADOOP_MAPRED_HOME=$HADOOP_HOME
+	export HADOOP_YARN_HOME=$HADOOP_HOME
+	export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop/
+	export HADOOP_OPTS="-Djava.library.path=$HADOOP_HOME/lib/native"
+	export HADOOP_COMMON_LIB_NATIVE_DIR=$HADOOP_HOME/lib/native
+	export PATH=$PATH:$HADOOP_HOME/sbin:$HADOOP_HOME/bin	
+	
+run the bash profile to reset the path
+. ~/.bash_profile
+
+ Check if the path is modified by passing the following command:
+ echo $PATH
+----------
+
+(5)HADOOP Configuration Pseudo-distributed Mode files
+
+#####core site xml
+
+<property>
+        <!-- Note that defaultFS was formerly fs.default.name . -->
+        <name>fs.defaultFS</name>
+        <value>hdfs://localhost:9000</value>
+</property>
+	
+##### hadoop-env.sh
+
+ 	export JAVA_HOME=/usr/java/jdk1.8.0_191-amd64	
+
+####yarn-site.xml
+	$HADOOP_CONF_DIR/yarn-site.xml
+    <property>
+      <name>yarn.nodemanager.aux-services</name>
+      <value>mapreduce_shuffle</value>
+    </property> 
+    <property>
+      <name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>
+      <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+    </property>
+	
+	
+#### etc/hadoop/hdfs-site.xml:
+	   etc/hadoop/hdfs-site.xml:
+       <property>
+			<name>dfs.replication</name>
+			<value>1</value>
+		</property>
+
+###etc/hadoop/mapred-site.xml	
+		cd $HADOOP_CONF_DIR
+		First run
+		   cp mapred-site.xml.template mapred-site.xml
+		   
+		   Then do this
+		   
+		   etc/hadoop/mapred-site.xml
+			 Add following property:
+			  
+			 <property>
+				<name>mapreduce.framework.name</name>
+				<value>yarn</value>
+			</property>
+				
+	
+	
+------------
+(6)Start Hadoop: Format Namenode, Start HDFS, Yarn and History Server
+	hdfs namenode -format [First time only]
+	
+	Turn on the daemons process:
+		cd $HADOOP_HOME/sbin/start-dfs.sh
+		cd $HADOOP_HOME/sbin/start-yarn.sh
+		OR
+		cd $HADOOP_HOME/sbin/start-all.sh
+	
+	To stop the daemons:
+		cd $HADOOP_HOME/sbin/ stop-all.sh
+	
+	So if you put localhost in the core.xml file or any other IP adress you will encoutner a problem
+	like permission denied
+	So do the following:
+	
+		cd ~/.ssh
+		ssh-keygen -t rsa -p""
+		cat id_rsa.pub >> authorized_keys
+		
+	Run jps command to check what daemon process that are running
+	
+--------
+(7)Make a directory /user inside HDFS:
+
+    hdfs dfs -mkdir /user/
+
+Create another directory /user/input: 
+    
+    hdfs dfs -mkdir /user/ec2-user
+
+Copy 100KWikiText.txt or whatever file into /user/ec2-user:
+
+    hdfs dfs -put /home/ec2-user/WikiText.txt /user/ec2-user
+	hdfs dfs -put /home/ec2-user/input1.txt /user/ec2-user
+	
+	
+	if namenode in safe mode: hdfs dfsadmin -safemode leave
+		then try again
+	
+	To view this heirarchy of HDFS:  
+		hdfs dfs -ls /user/ec2-user
+		
+------------
+
+(8)Command to run the program
+
+	hadoop jar filename.jar hdfs/directory/input hdfs/directory/output
+	
+
+ //Command for getting top100 wordpairbased on RF which are co-occur[left or right side of currentword] 
+
+   hadoop jar wordpairRFMR-0.0.1-SNAPSHOT.jar wordPairsRFDriver /user/ec2-user/wiki.txt /user/ec2-user/output10 /user/ec2-user/output11 100 true
+
+  //Command for getting top100 wordpairbased on RF which are co-occur[left or right side of currentword] and ignore RF value 1.00 since all top100 value will be 1.00.
+   hadoop jar wordpairRFMR-0.0.1-SNAPSHOT.jar wordPairsRFDriver /user/ec2-user/wiki.txt /user/ec2-user/output10 /user/ec2-user/output11 100 false
+// WordCount
+ hadoop jar /home/ec2-user/wordCount.jar /user/ec2-user/input1.txt /user/ec2-user/wordCountOutput
+
+//Wiki100 Jar exceution
+hadoop jar /home/ec2-user/WikiCount5.jar /user/ec2-user/WikiText.txt /user/ec2-user/output1 /user/ec2-user/wordPairOutput1
+
+ 
+ -----
+ (9) Copy the output from HDFS:
+
+   hdfs dfs -get /user/ec2-user/wordCountOutput/part-r-00000
+   hdfs dfs -get /user/ec2-user/wordPairOutput1/part-r-00000
+   
+   
+   hadoop fs -copyToLocal /user/ec2-user/wordPairOutput1/part-r-00000 /home/ec2-user/
+      
+	to view
+	cat MissingcardOutput/*
+
+=================================================================================================================================
+########################   FULLY -Distributed Mode ################################################
+======================================================================================================
+
+VM1--  Role : name node,secondaryname node,jobtracker,tasktracker as well as datanode
+
+Public DNS: ec2-34-201-14-218.compute-1.amazonaws.com
+Instance ID: i-0dd5d1c4c87835d13
+PrivateIP: 172.31.12.156
+Sec grp ID: sg-09e2167eb8b92a7ac
+
+ssh -i "vm1_bigdata.pem" ec2-18-235-1-203.compute-1.amazonaws.com
+
+ssh -i ~/.ssh/id_rsa 172.31.12.156
+
+ssh 172.31.12.156
+
+
+------------------------
+VM2 -- Role: DataNode,Task tracker
+
+Public DNS:  ec2-18-234-184-169.compute-1.amazonaws.com
+Instance ID: i-02eeb72f124b04664
+PrivateIP: 172.31.6.216
+Sec grp ID: sg-08089c089f8fb4064
+
+ssh -i "vm1_bigdata.pem" ec2-100-24-125-91.compute-1.amazonaws.com
+
+ssh -i ~/.ssh/id_rsa 172.31.6.216
+
+ssh 172.31.6.216
+--------------
+
+STEPs:
+
+(1) Follow same steps 1-4 are Pseudo-distributed for Phaseless ssh and java installation; if already done skip
+(2) Put IP Address of each system by their hostNames in host file -- NOTE MUST CHANGE IF YOU STOP THE AWS INSTANCES
+	vim /etc/hosts
+	As default you won't be able to add the host naem without changing the ownership
+	sudo chown -R  ec2-user:ec2-user /etc/hosts   -- only do first time
+	vim /etc/hosts
+	enter the following
+	172.31.12.156  ec2-34-201-14-218.compute-1.amazonaws.com
+	172.31.6.216 ec2-18-234-184-169.compute-1.amazonaws.com
+
+(3)	Hadoop Configuration for Fully distributed Mode for MASTER nodes ONLY
+#####core site xml
+
+<property>
+        <!-- Note that defaultFS was formerly fs.default.name . -->
+        <name>fs.defaultFS</name>
+        <value>hdfs://172.31.12.156:9000</value>
+</property>
+	
+	
+	
+#### etc/hadoop/hdfs-site.xml:
+    (A)	
+	   etc/hadoop/hdfs-site.xml:
+       <property>
+			<name>dfs.replication</name>
+			<value>2</value>
+		</property>
+		<property>
+			<name>dfs.namenode.name.dir</name>
+			<value>file:///usr/local/hadoop/hadoop_data/hdfs/namenode</value>
+		</property>
+		<property>
+			<name>dfs.datanode.data.dir</name>
+			<value>file:///usr/local/hadoop/hadoop_data/hdfs/datanode</value>
+		</property>
+		
+	(c) $HADOOP_CONF_DIR/masters  ??? 
+		sudo vim $HADOOP_CONF_DIR/masters
+		172.31.12.156
+       namenode_hostname
+
+   (d) $HADOOP_CONF_DIR/slaves  ??
+	   sudo vim $HADOOP_CONF_DIR/slaves
+	   172.31.12.156
+	   172.31.6.216
+       namenode_hostname
+       datanode_hostname
+ 
+   (e) Create namenode and datanode directories
+
+       sudo mkdir -p $HADOOP_HOME/hadoop_data/hdfs/namenode
+       sudo mkdir -p $HADOOP_HOME/hadoop_data/hdfs/datanode
+       sudo chown -R ec2-user $HADOOP_HOME
+
+###etc/hadoop/mapred-site.xml	
+		cd $HADOOP_CONF_DIR
+		First run
+		   cp mapred-site.xml.template mapred-site.xml
+		   
+		   Then do this
+		   
+		   etc/hadoop/mapred-site.xml
+			 Add following property:
+			  
+			 <property>
+				<name>mapreduce.framework.name</name>
+				<value>yarn</value>
+			</property>
+				
+##### hadoop-env.sh
+
+ 	export JAVA_HOME=/usr/java/jdk1.8.0_191-amd64	
+
+####yarn-site.xml
+	 
+	$HADOOP_CONF_DIR/yarn-site.xml
+    <property>
+      <name>yarn.nodemanager.aux-services</name>
+      <value>mapreduce_shuffle</value>
+    </property> 
+    <property>
+      <name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>
+      <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+    </property>
+
+
+
+(4)	Hadoop Configuration for Fully distributed Mode for SLAVE nodes ONLY
+
+#####core site xml
+Put the namenode's ip address
+
+<property>
+        <!-- Note that defaultFS was formerly fs.default.name . -->
+        <name>fs.defaultFS</name>
+        <value>hdfs://172.31.12.156:9000</value>
+</property>
+	
+	
+	
+#### etc/hadoop/hdfs-site.xml:
+    (A)	
+	   etc/hadoop/hdfs-site.xml:
+       <property>
+			<name>dfs.replication</name>
+			<value>2</value>
+		<property>
+			<name>dfs.datanode.data.dir</name>
+			<value>file:///usr/local/hadoop/hadoop_data/hdfs/datanode</value>
+		</property>
+		
+
+ 
+   (B) Create namenode and datanode directories
+
+       sudo mkdir -p $HADOOP_HOME/hadoop_data/hdfs/datanode
+       sudo chown -R ec2-user $HADOOP_HOME
+
+###etc/hadoop/mapred-site.xml	
+		cd $HADOOP_CONF_DIR
+		First run
+		   cp mapred-site.xml.template mapred-site.xml
+		   
+		   Then do this
+		   
+		   etc/hadoop/mapred-site.xml
+			 Add following property:
+			  
+			 <property>
+				<name>mapreduce.framework.name</name>
+				<value>yarn</value>
+			</property>
+				
+##### hadoop-env.sh
+
+ 	export JAVA_HOME=/usr/java/jdk1.8.0_191-amd64	
+
+####yarn-site.xml
+	 
+	$HADOOP_CONF_DIR/yarn-site.xml
+    <property>
+      <name>yarn.nodemanager.aux-services</name>
+      <value>mapreduce_shuffle</value>
+    </property> 
+    <property>
+      <name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>
+      <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+    </property>
+
+(5) #Start Hadoop Cluster ONLY on Master machine!
+
+   hdfs namenode -format
+   $HADOOP_HOME/sbin/start-dfs.sh
+   $HADOOP_HOME/sbin/start-yarn.sh
+   $HADOOP_HOME/sbin/mr-jobhistory-daemon.sh start historyserver
+   
+(6) Make sure all daemons are running using the command jps
+	 Check if all Daemons are running do jps on master machine, which shows:
+		9360 DataNode
+		9715 ResourceManager
+		9843 NodeManager
+		9542 SecondaryNameNode
+		10281 Jps
+		10206 JobHistoryServer
+		9215 NameNode
+	Check if all Daemons processes are running on Slave nodes; jps on slave machine which shows:
+		9477 NodeManager
+		9356 DataNode
+		9612 Jps
+
+
+
+
+(7) Run code on Master; Run following command for each case on masternode where Namenode Running!!
+	(7a) Make sure to put data in HDFS first before executing java code
+			How to create HDFS Directory:
+			Make a directory /user inside HDFS:
+				hdfs dfs -mkdir /user/
+			Create another directory /user/input: 
+				hdfs dfs -mkdir /user/ec2-user
+			Put stuff into your HDFS:
+				hdfs dfs -put /home/ec2-user/WikiText.txt /user/ec2-user
+				hdfs dfs -put /home/ec2-user/input1.txt /user/ec2-user
+	
+			To view this heirarchy of HDFS:  
+				hdfs dfs -ls /user/ec2-user
+
+//Wiki100 Jar exceution
+hadoop jar /home/ec2-user/submit4.jar /user/ec2-user/WikiText.txt /user/ec2-user/Wikioutput1 /user/ec2-user/WikiwordPairOutput1
+
+
+
+NameNode http://ec2-18-234-184-169.compute-1.amazonaws.com:50070/  
+ResourceManager http://ec2-18-234-184-169.compute-1.amazonaws.com:8088/  
+
+
+
+
+
+
+	
